@@ -71,11 +71,11 @@ function reconcileState(saved: PersistedState): PersistedState {
   const activeConversationId = conversations.some((item) => item.id === saved.preferences.activeConversationId)
     ? saved.preferences.activeConversationId
     : conversations[0]?.id ?? null;
-  const activeAgentId = agents.some((item) => item.id === saved.preferences.activeAgentId)
+  const activeAgentId = agents.some((item) => item.id === saved.preferences.activeAgentId && item.mode === "builder")
     ? saved.preferences.activeAgentId
     : agents.find((item) => item.mode === "builder")?.id ?? null;
   const reviewerAgentId = saved.preferences.reviewerAgentId
-    && agents.some((item) => item.id === saved.preferences.reviewerAgentId)
+    && agents.some((item) => item.id === saved.preferences.reviewerAgentId && item.mode === "reviewer")
     ? saved.preferences.reviewerAgentId
     : null;
   return {
@@ -144,6 +144,7 @@ export default function App() {
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
   const [sending, setSending] = useState(false);
   const saveRevision = useRef(0);
+  const providerRequestRevision = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -192,10 +193,17 @@ export default function App() {
   const activeConversation = state.conversations.find((item) => item.id === state.preferences.activeConversationId) ?? null;
   const builderAgents = state.agents.filter((agent) => agent.mode === "builder");
   const reviewerAgents = state.agents.filter((agent) => agent.mode === "reviewer");
-  const activeBuilder = state.agents.find((agent) => agent.id === state.preferences.activeAgentId) ?? builderAgents[0];
-  const activeReviewer = state.agents.find((agent) => agent.id === state.preferences.reviewerAgentId) ?? null;
+  const activeBuilder = state.agents.find((agent) => agent.id === state.preferences.activeAgentId && agent.mode === "builder") ?? builderAgents[0];
+  const activeReviewer = state.agents.find((agent) => agent.id === state.preferences.reviewerAgentId && agent.mode === "reviewer") ?? null;
   const activeProvider = state.preferences.selectedProvider;
   const activeModelId = state.preferences.selectedModelId;
+  const activeProviderModels = activeProvider ? modelsByProvider[activeProvider] ?? [] : [];
+  const modelReady = Boolean(
+    activeProvider
+    && activeModelId
+    && sessionSecrets[activeProvider]?.trim()
+    && activeProviderModels.some((model) => model.id === activeModelId),
+  );
   const filteredConversations = useMemo(() => {
     const query = conversationFilter.trim().toLowerCase();
     return query ? state.conversations.filter((item) => item.title.toLowerCase().includes(query)) : state.conversations;
@@ -237,7 +245,7 @@ export default function App() {
   const send = async () => {
     const content = prompt.trim();
     if (!content || sending || !activeConversation || !activeBuilder) return;
-    if (!activeProvider || !activeModelId || !sessionSecrets[activeProvider]) {
+    if (!activeProvider || !activeModelId || !modelReady) {
       setToast("Connect a provider and choose a model before sending.");
       setView("model");
       return;
@@ -316,37 +324,87 @@ export default function App() {
   };
 
   const connectProvider = async () => {
-    const secret = sessionSecrets[provider]?.trim();
+    const requestProvider = provider;
+    const secret = sessionSecrets[requestProvider]?.trim();
     if (!secret) return;
     if (!window.modelCodex) return setToast("Provider connections are available in the desktop app.");
+    const requestRevision = ++providerRequestRevision.current;
     setProviderLoading(true);
     setProviderError(null);
     try {
-      const models = await window.modelCodex.listModels(provider, secret);
+      const models = await window.modelCodex.listModels(requestProvider, secret);
+      if (requestRevision !== providerRequestRevision.current) return;
       if (!models.length) throw new Error("This credential returned no compatible chat models.");
-      setModelsByProvider((current) => ({ ...current, [provider]: models }));
-      const selectedModelId = state.preferences.selectedProvider === provider && models.some((model) => model.id === state.preferences.selectedModelId)
+      setModelsByProvider((current) => ({ ...current, [requestProvider]: models }));
+      const selectedModelId = state.preferences.selectedProvider === requestProvider && models.some((model) => model.id === state.preferences.selectedModelId)
         ? state.preferences.selectedModelId
-        : models[0].id;
-      patchPreferences({ selectedProvider: provider, selectedModelId });
-      setToast(`${models.length} ${PROVIDERS.find((item) => item.id === provider)?.name} models loaded for this session.`);
+        : null;
+      patchPreferences({ selectedProvider: requestProvider, selectedModelId });
+      setToast(selectedModelId
+        ? `${models.length} ${PROVIDERS.find((item) => item.id === requestProvider)?.name} models loaded. ${selectedModelId} is ready for chat.`
+        : `${models.length} ${PROVIDERS.find((item) => item.id === requestProvider)?.name} models loaded. Choose one to use in chat.`);
     } catch (error) {
-      setProviderError(error instanceof Error ? error.message : "The provider connection failed.");
+      if (requestRevision === providerRequestRevision.current) {
+        setProviderError(error instanceof Error ? error.message : "The provider connection failed.");
+      }
     } finally {
-      setProviderLoading(false);
+      if (requestRevision === providerRequestRevision.current) setProviderLoading(false);
     }
   };
 
   const changeProviderTab = (next: ProviderId) => {
+    providerRequestRevision.current += 1;
     setProvider(next);
+    setProviderLoading(false);
     setProviderError(null);
   };
 
+  const changeProviderSecret = (value: string) => {
+    const previous = sessionSecrets[provider] ?? "";
+    setSessionSecrets((current) => ({ ...current, [provider]: value }));
+    setProviderError(null);
+    if (value === previous) return;
+    providerRequestRevision.current += 1;
+    setProviderLoading(false);
+    if (modelsByProvider[provider]?.length) {
+      setModelsByProvider((current) => {
+        const next = { ...current };
+        delete next[provider];
+        return next;
+      });
+    }
+    if (state.preferences.selectedProvider === provider) {
+      patchPreferences({ selectedProvider: null, selectedModelId: null });
+    }
+  };
+
   const updateAgent = (agentId: string, patch: Partial<AgentDefinition>) => {
-    setState((current) => ({
-      ...current,
-      agents: current.agents.map((agent) => agent.id === agentId ? { ...agent, ...patch } : agent),
-    }));
+    setState((current) => {
+      const agents = current.agents.map((agent) => agent.id === agentId ? { ...agent, ...patch } : agent);
+      const preferences = { ...current.preferences };
+      if (patch.mode === "reviewer" && preferences.activeAgentId === agentId) {
+        preferences.activeAgentId = agents.find((agent) => agent.mode === "builder")?.id ?? null;
+      }
+      if (patch.mode === "builder" && preferences.reviewerAgentId === agentId) preferences.reviewerAgentId = null;
+      return { ...current, agents, preferences };
+    });
+  };
+
+  const duplicateAgent = (agentId: string) => {
+    const source = state.agents.find((agent) => agent.id === agentId);
+    if (!source) return;
+    const duplicate: AgentDefinition = {
+      ...source,
+      id: id("agent"),
+      name: `${source.name} copy`,
+      source: "custom",
+      readOnly: false,
+      tools: [...source.tools],
+      documents: source.documents.map((document) => ({ ...document, id: id("document") })),
+    };
+    setState((current) => ({ ...current, agents: [...current.agents, duplicate] }));
+    setSelectedAgentId(duplicate.id);
+    setToast(`${source.name} duplicated. You can now edit the copy.`);
   };
 
   const createAgent = () => {
@@ -378,7 +436,7 @@ export default function App() {
         <div className="window-controls-spacer" />
         <div className="sidebar-tools">
           <button aria-label="Toggle sidebar" onClick={() => patchPreferences({ sidebarCollapsed: !state.preferences.sidebarCollapsed })}><Icon name="layout" size={17} /></button>
-          <button aria-label="Back"><Icon name="back" size={18} /></button>
+          <button aria-label="Back to chat" disabled={view === "chat"} onClick={() => setView("chat")}><Icon name="back" size={18} /></button>
           <button aria-label="Forward" disabled><Icon name="forward" size={18} /></button>
         </div>
 
@@ -396,7 +454,7 @@ export default function App() {
         </nav>
 
         <div className="sidebar-section project-section">
-          <div className="section-title"><span>Projects</span><button aria-label="New project"><Icon name="plus" size={15} /></button></div>
+          <div className="section-title"><span>Projects</span><button aria-label="New project" onClick={createConversation}><Icon name="plus" size={15} /></button></div>
           <button className={`project-row ${projectOpen ? "active" : ""}`} onClick={() => setProjectOpen((current) => !current)}>
             <Icon name="folder" size={18} /><span>New project</span><Icon name="chevron" size={14} />
           </button>
@@ -421,13 +479,13 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
-          <button className="footer-row"><Icon name="folder" size={18} /><span>Learning Repos</span></button>
-          <button className="account-row"><span className="account-mark">A</span><span><strong>Anand</strong><small>{appInfo}</small></span><Icon name="help" size={16} /></button>
+          <button className="footer-row" disabled title="Learning repositories are not included in this build"><Icon name="folder" size={18} /><span>Learning Repos</span></button>
+          <button className="account-row" disabled><span className="account-mark">A</span><span><strong>Anand</strong><small>{appInfo}</small></span><Icon name="help" size={16} /></button>
         </div>
       </aside>
 
       <section className="workspace">
-        <div className="workspace-chrome"><span className="drag-region" /><button aria-label="Toggle activity"><Icon name="layout" size={17} /></button><button aria-label="More options"><Icon name="more" size={18} /></button></div>
+        <div className="workspace-chrome"><span className="drag-region" /><button aria-label="Toggle sidebar" onClick={() => patchPreferences({ sidebarCollapsed: !state.preferences.sidebarCollapsed })}><Icon name="layout" size={17} /></button><button aria-label="More options" disabled title="No additional workspace actions"><Icon name="more" size={18} /></button></div>
         {view === "chat" && (
           <ChatView
             conversation={activeConversation}
@@ -440,7 +498,10 @@ export default function App() {
             onAttach={() => void attachChatFiles()}
             onRemoveAttachment={(fileId) => setChatAttachments((current) => current.filter((file) => file.id !== fileId))}
             sending={sending}
-            providerLabel={activeProvider && activeModelId ? activeModelId : "Model"}
+            providerLabel={modelReady && activeModelId ? activeModelId : "Connect model"}
+            providerReady={modelReady}
+            onOpenModel={() => setView("model")}
+            onOpenAgents={() => setView("agents")}
             memoryEnabled={state.preferences.memoryEnabled}
             onMemory={(enabled) => patchPreferences({ memoryEnabled: enabled })}
             builders={builderAgents}
@@ -458,6 +519,7 @@ export default function App() {
             onSelect={setSelectedAgentId}
             onCreate={createAgent}
             onUpdate={updateAgent}
+            onDuplicate={duplicateAgent}
             onToast={setToast}
           />
         )}
@@ -466,13 +528,17 @@ export default function App() {
             provider={provider}
             onProvider={changeProviderTab}
             secrets={sessionSecrets}
-            onSecret={(value) => setSessionSecrets((current) => ({ ...current, [provider]: value }))}
+            onSecret={changeProviderSecret}
             visible={visibleSecret}
             onToggleVisible={() => setVisibleSecret((current) => !current)}
             onConnect={() => void connectProvider()}
             models={modelsByProvider[provider] ?? []}
             selectedModelId={state.preferences.selectedProvider === provider ? state.preferences.selectedModelId : null}
-            onModel={(modelId) => patchPreferences({ selectedProvider: provider, selectedModelId: modelId })}
+            onModel={(modelId) => {
+              patchPreferences({ selectedProvider: provider, selectedModelId: modelId });
+              setToast(`${modelId} selected for chat.`);
+            }}
+            onUseInChat={() => setView("chat")}
             loading={providerLoading}
             error={providerError}
           />
@@ -484,9 +550,9 @@ export default function App() {
             secrets={connectorSecrets}
             onSecrets={setConnectorSecrets}
             onToast={setToast}
-            provider={activeProvider}
-            apiKey={activeProvider ? sessionSecrets[activeProvider] ?? "" : ""}
-            model={activeModelId}
+            provider={modelReady ? activeProvider : null}
+            apiKey={modelReady && activeProvider ? sessionSecrets[activeProvider] ?? "" : ""}
+            model={modelReady ? activeModelId : null}
           />
         )}
       </section>
@@ -513,6 +579,9 @@ function ChatView(props: {
   onRemoveAttachment: (id: string) => void;
   sending: boolean;
   providerLabel: string;
+  providerReady: boolean;
+  onOpenModel: () => void;
+  onOpenAgents: () => void;
   memoryEnabled: boolean;
   onMemory: (enabled: boolean) => void;
 }) {
@@ -561,13 +630,13 @@ function ChatView(props: {
             aria-label="Prompt"
           />
           <div className="composer-controls">
-            <div className="composer-left"><button aria-label="Attach files" onClick={props.onAttach}><Icon name="plus" size={21} /></button><button className="access-chip"><Icon name="tools" size={15} />Full access</button><label className="memory-toggle" title="Memory compilation can make an additional model call"><input type="checkbox" checked={props.memoryEnabled} onChange={(event) => props.onMemory(event.target.checked)} /><span><Icon name="history" size={13} />Memory</span></label></div>
+            <div className="composer-left"><button aria-label="Attach files" onClick={props.onAttach}><Icon name="plus" size={21} /></button><button className="access-chip" onClick={props.onOpenAgents} title="Configure the selected agent's tools"><Icon name="tools" size={15} />Agent tools</button><label className="memory-toggle" title="Memory compilation can make an additional model call"><input type="checkbox" checked={props.memoryEnabled} onChange={(event) => props.onMemory(event.target.checked)} /><span><Icon name="history" size={13} />Memory</span></label></div>
             <div className="composer-right">
               <label className="agent-select"><span>Builder</span><select value={props.builderId} onChange={(event) => props.onBuilder(event.target.value)}>{props.builders.map((agent) => <option value={agent.id} key={agent.id}>{agent.name}</option>)}</select><Icon name="chevron" size={13} /></label>
               <label className="agent-select reviewer"><span>Reviewer</span><select value={props.reviewerId} onChange={(event) => props.onReviewer(event.target.value)}><option value="">Off</option>{props.reviewers.map((agent) => <option value={agent.id} key={agent.id}>{agent.name}</option>)}</select><Icon name="chevron" size={13} /></label>
-              <button className="model-compact" title={props.providerLabel}><Icon name="spark" size={14} /><span>{props.providerLabel}</span><Icon name="chevron" size={13} /></button>
-              <button aria-label="Voice input"><Icon name="mic" size={19} /></button>
-              <button className="send-button" disabled={!props.prompt.trim() || props.sending} onClick={props.onSend} aria-label={props.sending ? "Running" : "Send"}><Icon name={props.sending ? "stop" : "send"} size={18} /></button>
+              <button className={`model-compact ${props.providerReady ? "ready" : "disconnected"}`} title={props.providerReady ? props.providerLabel : "Connect a provider and choose a model"} onClick={props.onOpenModel}><Icon name="spark" size={14} /><span>{props.providerLabel}</span><Icon name="chevron" size={13} /></button>
+              <button aria-label="Voice input" disabled title="Voice input is not included in this build"><Icon name="mic" size={19} /></button>
+              <button className="send-button" disabled={!props.prompt.trim() || props.sending} onClick={props.onSend} aria-label={props.sending ? "Running" : "Send"} title={!props.prompt.trim() ? "Type a prompt to send" : props.sending ? "Waiting for the selected model" : props.providerReady ? "Send" : "Connect a model to send"}><Icon name={props.sending ? "spark" : "send"} size={18} /></button>
             </div>
           </div>
         </div>
@@ -583,9 +652,12 @@ function AgentsView(props: {
   onSelect: (id: string) => void;
   onCreate: () => void;
   onUpdate: (id: string, patch: Partial<AgentDefinition>) => void;
+  onDuplicate: (id: string) => void;
   onToast: (message: string) => void;
 }) {
+  const [query, setQuery] = useState("");
   const agent = props.agents.find((item) => item.id === props.selectedId) ?? props.agents[0];
+  const visibleAgents = props.agents.filter((item) => `${item.name} ${item.role} ${item.mode}`.toLowerCase().includes(query.trim().toLowerCase()));
   if (!agent) return null;
   const attachDocuments = async () => {
     if (!window.modelCodex) return props.onToast("File attachments are available in the desktop app.");
@@ -597,9 +669,9 @@ function AgentsView(props: {
       <header className="page-header"><div><span>PERSONA WORKBENCH</span><h1>Agents</h1><p>Create cached builder prompts and independent reviewers from the Agent Council.</p></div><button className="primary" onClick={props.onCreate}><Icon name="plus" size={16} />New agent</button></header>
       <div className="agents-layout">
         <aside className="agent-list-panel">
-          <label className="panel-search"><Icon name="search" size={15} /><input placeholder="Search agents" /></label>
+          <label className="panel-search"><Icon name="search" size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search agents" /></label>
           <div className="template-label">AGENT COUNCIL</div>
-          {props.agents.map((item) => (
+          {visibleAgents.map((item) => (
             <button key={item.id} className={item.id === agent.id ? "active" : ""} onClick={() => props.onSelect(item.id)}>
               <span className={`agent-avatar ${item.mode}`}>{item.name.slice(0, 1)}</span>
               <span><strong>{item.name}</strong><small>{item.role}</small></span>
@@ -608,7 +680,7 @@ function AgentsView(props: {
           ))}
         </aside>
         <section className="agent-editor">
-          <div className="editor-title"><div className={`large-avatar ${agent.mode}`}>{agent.name.slice(0, 1)}</div><div><span>{agent.source === "council" ? "AGENT COUNCIL TEMPLATE" : "CUSTOM AGENT"}</span><h2>{agent.name}</h2><p>{agent.description}</p></div><span className={`mode-badge ${agent.mode}`}>{agent.mode}</span></div>
+          <div className="editor-title"><div className={`large-avatar ${agent.mode}`}>{agent.name.slice(0, 1)}</div><div><span>{agent.source === "council" ? "AGENT COUNCIL TEMPLATE" : "CUSTOM AGENT"}</span><h2>{agent.name}</h2><p>{agent.description}</p></div><div className="editor-actions"><span className={`mode-badge ${agent.mode}`}>{agent.mode}</span><button className="secondary" onClick={() => props.onDuplicate(agent.id)}><Icon name="new" size={14} />Duplicate</button></div></div>
           <div className="form-grid">
             <label>Name<input value={agent.name} onChange={(event) => props.onUpdate(agent.id, { name: event.target.value })} disabled={agent.readOnly} /></label>
             <label>Mode<select value={agent.mode} onChange={(event) => props.onUpdate(agent.id, { mode: event.target.value as AgentMode })} disabled={agent.readOnly}><option value="builder">Builder</option><option value="reviewer">Reviewer</option></select></label>
@@ -634,12 +706,14 @@ function ModelView(props: {
   models: ProviderModel[];
   selectedModelId: string | null;
   onModel: (id: string) => void;
+  onUseInChat: () => void;
   loading: boolean;
   error: string | null;
 }) {
   const selected = PROVIDERS.find((item) => item.id === props.provider)!;
   const secret = props.secrets[props.provider] ?? "";
   const [modelQuery, setModelQuery] = useState("");
+  useEffect(() => setModelQuery(""), [props.provider]);
   const visibleModels = props.models.filter((model) => `${model.name} ${model.id}`.toLowerCase().includes(modelQuery.trim().toLowerCase()));
   return (
     <div className="page-view model-page">
@@ -654,7 +728,7 @@ function ModelView(props: {
         </section>
         <section className="settings-card">
           <div className="card-heading"><span>02</span><div><h2>Choose a model</h2><p>The live catalog appears after the provider validates your key.</p></div></div>
-          {props.models.length ? <><label className="model-search"><Icon name="search" size={14} /><input value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder={`Search ${props.models.length} models`} /></label><div className="model-list">{visibleModels.map((model) => <button className={model.id === props.selectedModelId ? "active" : ""} onClick={() => props.onModel(model.id)} key={model.id}><span className="radio" /><span><strong>{model.name}</strong><small>{model.id}{model.contextWindow ? ` · ${model.contextWindow.toLocaleString()} context` : ""}</small></span></button>)}{visibleModels.length === 0 && <p className="no-models">No models match “{modelQuery}”.</p>}</div></> : <div className="model-placeholder"><div><span className="radio" /><span><strong>Connect to load live models</strong><small>No credential is stored</small></span></div></div>}
+          {props.models.length ? <><label className="model-search"><Icon name="search" size={14} /><input value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder={`Search ${props.models.length} models`} /></label><div className="model-list">{visibleModels.map((model) => <button className={model.id === props.selectedModelId ? "active" : ""} onClick={() => props.onModel(model.id)} key={model.id}><span className="radio" /><span><strong>{model.name}</strong><small>{model.id}{model.contextWindow ? ` · ${model.contextWindow.toLocaleString()} context` : ""}</small></span></button>)}{visibleModels.length === 0 && <p className="no-models">No models match “{modelQuery}”.</p>}</div>{props.selectedModelId && <div className="model-ready"><span><Icon name="check" size={14} />Ready for this session</span><button className="primary" onClick={props.onUseInChat}>Use in chat</button></div>}</> : <div className="model-placeholder"><div><span className="radio" /><span><strong>Connect to load live models</strong><small>No credential is stored</small></span></div></div>}
         </section>
       </div>
     </div>

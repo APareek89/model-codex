@@ -54,11 +54,22 @@ npm ci
 npm run dev
 ```
 
+For isolated local provider QA only, use the git-ignored file [`.env.qa.example`](./.env.qa.example) as the template:
+
+```bash
+cp .env.qa.example .env.qa
+# Add HF_TOKEN and ANTHROPIC_API_KEY to .env.qa, then run:
+npm run qa:live
+```
+
+`.env.qa` is read only by the QA runner. The application itself never reads or bundles environment files; normal users always enter their own credentials in the **Model** tab.
+
 Available scripts:
 
 - `npm run dev` — Vite renderer plus Electron development app.
 - `npm run build` — type-check and create renderer/main/preload production output.
 - `npm test` — unit tests for provider adapters and tool boundaries.
+- `npm run qa:live` — build and run one isolated, minimal HF + Anthropic Electron smoke test from `.env.qa`.
 - `npm run dist` — build, package the arm64 DMG, ad-hoc sign the `.app`, and verify the signature.
 
 The finished artifact is written to `release/Model-Codex-<version>-mac-arm64.dmg`. The packaged application is also available at `release/mac-arm64/Model Codex.app`.

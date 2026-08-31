@@ -4,7 +4,10 @@ The renderer is presentation-only. A narrow typed preload bridge carries validat
 
 ```mermaid
 flowchart TD
-    U["USER REQUEST<br/>[DATA · React state]<br/>in: prompt, attachments, personas, selected model<br/>out: typed run request"] --> P{"PERMISSION GATE<br/>[FUNCTION · Electron main]<br/>condition: requested tools, files, and connector approved?"}
+    D["MODEL SESSION SETUP<br/>[FUNCTION · renderer]<br/>in: volatile key + live provider catalog<br/>out: explicit model selection"] --> G{"SESSION READY<br/>[FUNCTION]<br/>condition: key present and selected model exists in validated catalog?"}
+    G -->|"no"| D
+    G -->|"yes"| U["USER REQUEST<br/>[DATA · React state]<br/>in: prompt, attachments, personas, selected model<br/>out: typed run request"]
+    U --> P{"PERMISSION GATE<br/>[FUNCTION · Electron main]<br/>condition: requested tools, files, and connector approved?"}
     P -->|"no"| ASK["VISIBLE CONFIGURATION<br/>[FUNCTION · renderer]<br/>in: missing grant<br/>out: agent toggle, file dialog, or connector approval"]
     ASK -. "updated run state" .-> P
     P -->|"yes"| C["CONTEXT ASSEMBLER<br/>[FUNCTION · agent-runtime.ts]<br/>in: builder, checkpoint, recent turns, retrieved wiki, files<br/>out: stable provider context"]
@@ -23,7 +26,8 @@ flowchart TD
     K --> W["LOCAL MEMORY<br/>[DATA · Markdown source + JSON token index]<br/>out: immutable checkpoint, conflict-marked wiki, latest 10 turns"]
     W --> U
     E["EXTERNAL CONNECTOR BUILDER<br/>[AGENT + Zod validator]<br/>in: redacted API docs<br/>out: user-approved, same-origin non-secret manifest"] --> T
-    S["SESSION SECRET VAULT<br/>[DATA · React memory only]<br/>in: provider + connector credentials<br/>out: request-scoped auth; cleared on quit"] --> L
+    S["SESSION SECRET VAULT<br/>[DATA · React memory only]<br/>in: provider + connector credentials<br/>out: request-scoped auth; cleared on quit"] --> D
+    S --> L
     S --> X
 
     classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
@@ -32,9 +36,9 @@ flowchart TD
     classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
     classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
     class U,O,W,S data;
-    class C,T,R,M,P fn;
-    class P,T,R,M dec;
-    class ASK ask;
+    class C,T,R,M,P,G fn;
+    class P,T,R,M,G dec;
+    class ASK,D ask;
     class L,V,Q,K,E agent;
     class X data;
 ```
@@ -43,6 +47,7 @@ flowchart TD
 
 | Gate | Enforcer | Rule |
 |---|---|---|
+| Provider readiness | `src/App.tsx` | A session is ready only when the volatile key is present and the explicit model selection belongs to that key's validated live catalog. |
 | Desktop trust | `electron/main.ts` + `electron/preload.cts` | Only the exact packaged scheme/hostname (or exact development origin) receives the narrow validated IPC bridge. |
 | Tool permission | `electron/agent-runtime.ts` + `electron/tools.ts` | Only agent-enabled tools, attached files, and approved connector operations are exposed. |
 | Credential persistence | React session state + `electron/secrets.ts` + storage schema | Credential fields never enter durable state; credential-shaped text is redacted again at attachment and write boundaries. |

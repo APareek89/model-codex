@@ -41,6 +41,21 @@ describe("provider adapters", () => {
     expect(await listProviderModels("google", "google_test_value")).toEqual([expect.objectContaining({ id: "gemini-test", contextWindow: 1000000 })]);
   });
 
+  it("maps Hugging Face, Anthropic, and Google chat completions", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ choices: [{ message: { content: "hf answer" } }] }))
+      .mockResolvedValueOnce(response({ content: [{ type: "text", text: "claude answer" }] }))
+      .mockResolvedValueOnce(response({ candidates: [{ content: { parts: [{ text: "gemini answer" }] } }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const base = { apiKey: "fixture-provider-value", system: "system", messages: [{ role: "user" as const, content: "hello" }] };
+    await expect(completeText({ ...base, provider: "huggingface", model: "hf-model" })).resolves.toBe("hf answer");
+    await expect(completeText({ ...base, provider: "anthropic", model: "claude-model" })).resolves.toBe("claude answer");
+    await expect(completeText({ ...base, provider: "google", model: "gemini-model" })).resolves.toBe("gemini answer");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).max_tokens).toBe(4096);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).system).toBe("system");
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).systemInstruction.parts[0].text).toBe("system");
+  });
+
   it("redacts credential-shaped strings from provider errors", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response({ error: { message: "bad key sk-test-secret-value" } }, 401)));
     await expect(listProviderModels("openai", "sk-test-secret-value")).rejects.not.toThrow("sk-test-secret-value");

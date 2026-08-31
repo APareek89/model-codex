@@ -41,3 +41,4 @@ CI: none
 
 | Date | Hypothesis | Result | Cost note |
 |---|---|---|---|
+| 2026-08-31 | Minimal catalog-selected HF and Claude completions, followed by isolated Electron repeats, will distinguish provider defects from renderer readiness defects. | PASS — 135 HF and 10 Claude models loaded; `ibm-granite/granite-4.2-3b` and `claude-haiku-4-5-20251001` returned `QA_OK` directly and through the final Electron flow. | 10 deliberately tiny calls total; exact billing was not returned, estimated well below $0.01 and safely below the authorized $2 ceiling. |

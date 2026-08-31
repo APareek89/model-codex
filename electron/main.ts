@@ -20,6 +20,18 @@ import { loadState, saveState } from "./storage.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const rendererOrigin = "model-codex://app";
+const qaUserDataPath = process.env.MODEL_CODEX_QA_USER_DATA;
+
+// Automated QA must never mutate a person's real local workspace. This escape hatch
+// is deliberately unavailable in packaged builds and contains no credential logic.
+if (!app.isPackaged && qaUserDataPath) {
+  const resolvedQaPath = path.resolve(qaUserDataPath);
+  const temporaryRoot = path.resolve(app.getPath("temp"));
+  if (!resolvedQaPath.startsWith(`${temporaryRoot}${path.sep}`)) {
+    throw new Error("MODEL_CODEX_QA_USER_DATA must be a child of the system temporary directory.");
+  }
+  app.setPath("userData", resolvedQaPath);
+}
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "model-codex",

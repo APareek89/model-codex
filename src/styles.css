@@ -718,6 +718,10 @@ select {
   white-space: nowrap;
 }
 
+.model-compact.disconnected {
+  color: #9a6332;
+}
+
 .send-button {
   width: 31px;
   height: 31px !important;
@@ -1183,6 +1187,20 @@ select {
   color: #7049a4;
 }
 
+.editor-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.editor-actions .secondary {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 180px;
@@ -1546,6 +1564,22 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.model-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  gap: 12px;
+}
+
+.model-ready > span {
+  display: inline-flex;
+  align-items: center;
+  color: #347343;
+  gap: 6px;
+  font-size: 10px;
 }
 
 .model-list strong {

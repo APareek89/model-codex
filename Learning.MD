@@ -58,3 +58,14 @@
 **Deepest why type:** `flow`
 **Action taken:** Reviewer and memory failures now become visible trace errors while preserving the builder draft, and failed sends remove the optimistic message before restoring the prompt.
 **Preventive action:** Mark every pipeline stage as required or best-effort; a best-effort failure must not erase a completed required stage.
+
+### 2026-08-31 — Persisted model labels overstated live chat readiness
+
+**Symptom:** After entering an HF or Anthropic credential and selecting a model, chat could appear unusable or show a model that was not actually connected for the current process.
+**Why 1:** The selected provider/model IDs were persisted, while credentials and live catalogs correctly cleared on quit.
+**Why 2:** The composer treated the persisted IDs alone as “ready” and offered no direct transition back to chat after a fresh selection.
+**Why 3:** Editing or clearing a credential did not invalidate the catalog loaded by the previous credential, and an in-flight request could finish after the user switched providers.
+**Why 4:** QA covered the provider adapters but did not previously encode the full credential → catalog → explicit selection → composer readiness state machine.
+**Deepest why type:** `flow`
+**Action taken:** Readiness now requires a current in-memory credential plus a validated catalog containing the selected model; key edits and provider switches invalidate stale work, selection is explicit, and “Use in chat”/“Connect model” actions make the transition unambiguous.
+**Preventive action:** Every session-only capability must have an end-to-end test that starts from durable-but-secretless state, changes credentials mid-request, and verifies the exact UI readiness signal before dispatch.

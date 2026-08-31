@@ -30,6 +30,7 @@ yarn-error.log*
 
 # local environment files are never part of this app's credential flow
 .env*
+!.env.qa.example
 /dist/
 dist-electron/
 release/

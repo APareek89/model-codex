@@ -1,7 +1,7 @@
 {
   "name": "model-codex-desktop",
   "productName": "Model Codex",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A private, local-first multi-model agent workspace for macOS.",
   "author": "Anand Pareek",
   "private": true,
@@ -18,7 +18,8 @@
     "dist": "npm run build && npm run package && npm run sign:adhoc",
     "lint": "eslint src electron scripts vite.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "qa:live": "npm run build && node --env-file=.env.qa scripts/qa-electron-live.mjs"
   },
   "dependencies": {
     "react": "19.2.8",
@@ -41,6 +42,7 @@
     "eslint": "9.39.4",
     "globals": "17.11.0",
     "jsdom": "30.0.1",
+    "playwright": "^1.62.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.68.0",
     "vite": "8.2.2",
