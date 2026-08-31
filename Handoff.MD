@@ -1,32 +1,35 @@
 # Handoff.MD — Model Codex Desktop
-last-synced: `76bf7fb`
-> AGENT: read this fully at session start. FIRST run `git log --oneline 76bf7fb..HEAD` and reconcile drift.
+last-synced: `1036b67`
+> AGENT: read this fully at session start. FIRST run `git log --oneline 1036b67..HEAD` and reconcile drift.
 > Update before every checkpoint commit, at phase end, and on low-context signals. Rewrite as a snapshot, re-stamp from HEAD, and keep under ~40 lines / ~15 completed items.
 > Git checkpoints are automatic. Run the staged secret scan and configured light FMEA before every commit.
 
 ## Compact summary of previous session
-The initial vinext web app implemented multi-provider chat and fixed an SSR hydration mismatch. The user then approved a full local Electron rewrite matching the supplied light Codex screenshot, with Agent Council personas, LLM Wiki memory, tools, external connectors, and arm64 DMG packaging.
+The hosted vinext prototype was replaced by the approved local Electron/Vite/React/TypeScript arm64 app. The pale Codex reference UI now has a bottom composer plus Model, Agents, and External APIs workspaces.
 
 ## Current state
-- ✅ Working vinext app preserved at checkpoint `76bf7fb`.
-- ✅ Product/architecture approved: Electron main + narrow preload + React renderer; no hosted backend.
-- ✅ Agent template source confirmed: `/Users/anandpareek/Documents/market-research-agents`.
-- ✅ Power Coding setup installed; master Mermaid validates and standalone viewer is generated.
-- ▶ Next phase: migrate the preserved web checkpoint to the approved Electron foundation.
+- ✅ Electron main/preload boundary uses context isolation, sandboxing, trusted-sender checks, strict production CSP, and a custom local protocol.
+- ✅ Hugging Face, OpenAI, Anthropic, and Google credentials are React-memory-only; live model discovery and provider inference are wired.
+- ✅ Agent Council ships Scout, Astra, Vera, Vera Expert, Cleo, and Cleo Expert with builder → reviewer → revision flow.
+- ✅ Local tools cover web search/fetch, attached files, approved API connectors, and macOS-sandboxed Python.
+- ✅ LLM-Wiki memory writes redacted raw JSONL, verified Markdown facts, a rebuildable JSON index, and immutable compaction checkpoints.
+- ✅ External API docs become Zod-validated draft manifests; the user approves operations and re-enters secret values each launch.
+- ✅ Pre-commit FMEA closed cross-origin credential forwarding, DNS rebinding, duplicate retry, hidden reviewer-cost, and optional-stage failure paths; no P0/P1 remains in the light scan.
+- ✅ Screenshot render, native development bridge, packaged custom protocol, Python isolation, arm64 architecture, app signature, and DMG checksum were smoke-tested.
+- ✅ Eight unit tests, lint, type-check, build, Mermaid validation, staged secret scan, and production dependency audit pass.
 
 ## Pending points
-- 🤖 Replace vinext with Electron + Vite + React + TypeScript and reproduce the target UI.
-- 🤖 Implement provider, memory, agents, tools, and connector lanes in smallest working vertical slices.
-- 🤖 Package and smoke-test an ad-hoc-signed macOS arm64 DMG.
-- 🤖 Offer the Loop when the first desktop core path works end-to-end.
-- 🧑 USER: Re-enter personal credentials after every app restart by design.
+- 🤖 Commit the completed desktop slice after the final staged secret/sentinel pass.
+- 🤖 Run feature-complete/full FMEA, final `npm run dist`, mount-test the final DMG, and verify the no-secret state invariant.
+- 🤖 Refresh final Handoff stamp and commit the release-ready state.
+- 🧑 USER: Add personal provider/API credentials in the app after each restart by design.
 
 ## Decisions
-- 2026-08-28 — Credentials are memory-only, never persisted — privacy requirement; restart requires reconnecting.
-- 2026-08-28 — LLM Wiki uses Markdown as source of truth plus a rebuildable local index — inspectable, portable memory.
-- 2026-08-28 — Tool authority lives in Electron main behind typed preload IPC — renderer compromise must not imply machine access.
-- 2026-08-28 — Agent Council seeds Scout, Astra, Vera, Vera Expert, Cleo, and Cleo Expert — user-approved source.
-- 2026-08-28 — Debugging uses Mermaid files + standalone viewer only — user selected option A.
-- 2026-08-28 — Electron Builder targets one unsigned/ad-hoc-signed arm64 DMG — personal sharing only.
+- 2026-08-28 — Credentials are volatile and never persisted; there is no `.env` credential path.
+- 2026-08-28 — Markdown is long-term memory source of truth; JSON token search is rebuildable.
+- 2026-08-28 — Agent Council source is `/Users/anandpareek/Documents/market-research-agents`.
+- 2026-08-28 — Only option-A Mermaid + standalone viewer; no in-app debug tab.
+- 2026-08-31 — Provider-agnostic bounded JSON tool protocol gives every selected LLM the same local tools.
+- 2026-08-31 — Apple Silicon DMG is ad-hoc signed only; no Developer ID, notarization, or updater.
 
-**Session efficiency:** 🎯 ~45% feature · 🔧 ~45% support (architecture/source discovery and Power Coding bootstrap) · 🔁 ~10% rework
+**Session efficiency:** 🎯 ~62% feature · 🔧 ~28% support/verification · 🔁 ~10% rework

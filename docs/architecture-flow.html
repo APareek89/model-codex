@@ -13,36 +13,35 @@
 <h1>Architecture Flow</h1>
 <h2>01 Model Codex desktop agent flow</h2>
 <pre class="mermaid">%% 01 Model Codex desktop agent flow
-%% files: electron/main.ts, electron/preload.ts, src/App.tsx, src/services/agent-runtime.ts, src/services/memory.ts, src/services/tools.ts, src/services/connectors.ts
+%% files: electron/main.ts, electron/preload.cts, electron/agent-runtime.ts, electron/providers.ts, electron/memory.ts, electron/tools.ts, electron/storage.ts, src/App.tsx
 %% granularity: master
-%% intended — approved 2026-08-28; not yet built
+%% built — verified 2026-08-31 after trust-boundary and failure-fallback review
 flowchart TD
-    U["USER REQUEST&lt;br/&gt;[DATA · renderer state]&lt;br/&gt;in: prompt, files, persona, model, enabled tools&lt;br/&gt;out: typed run request"] --&gt; P{"PERMISSION GATE&lt;br/&gt;[FUNCTION]&lt;br/&gt;condition: requested files, hosts, and tools approved?"}
-    P --&gt;|"no"| ASK["PERMISSION PROMPT&lt;br/&gt;[FUNCTION · no LLM writes it]&lt;br/&gt;in: missing grants&lt;br/&gt;out: user decision"]
-    ASK -. "reply carried as run state" .-&gt; P
-    P --&gt;|"yes"| C["CONTEXT ASSEMBLER&lt;br/&gt;[FUNCTION]&lt;br/&gt;in: builder prompt, checkpoint, recent turns, retrieved wiki pages, attachments&lt;br/&gt;out: stable provider context"]
-    C --&gt; L["BUILDER TURN&lt;br/&gt;[AGENT · user-selected model]&lt;br/&gt;in: assembled context + tool schemas&lt;br/&gt;out: answer or tool calls"]
-    L --&gt; T{"TOOL ROUTER&lt;br/&gt;[FUNCTION]&lt;br/&gt;condition: validated tool call requested?"}
-    T --&gt;|"yes"| X["LOCAL TOOL EXECUTION&lt;br/&gt;[LIBRARY · Electron main / Pyodide]&lt;br/&gt;in: schema-valid call + grants&lt;br/&gt;out: bounded result + trace"]
-    X --&gt; L
-    T --&gt;|"no"| R{"REVIEW MODE&lt;br/&gt;[FUNCTION]&lt;br/&gt;condition: reviewer persona enabled?"}
-    R --&gt;|"yes"| V["REVIEWER TURN&lt;br/&gt;[AGENT · user-selected model]&lt;br/&gt;in: original ask + answer + reviewer prompt&lt;br/&gt;out: critique"]
-    V --&gt; Q["REVISION TURN&lt;br/&gt;[AGENT · builder model]&lt;br/&gt;in: answer + critique + binding format contract&lt;br/&gt;out: revised answer"]
-    R --&gt;|"no"| O["VISIBLE RESPONSE&lt;br/&gt;[DATA · local conversation]&lt;br/&gt;out: answer + activity trace"]
+    U["USER REQUEST&lt;br/&gt;[DATA · React state]&lt;br/&gt;in: prompt, attachments, personas, selected model&lt;br/&gt;out: typed run request"] --&gt; P{"PERMISSION GATE&lt;br/&gt;[FUNCTION · Electron main]&lt;br/&gt;condition: requested tools, files, and connector approved?"}
+    P --&gt;|"no"| ASK["VISIBLE CONFIGURATION&lt;br/&gt;[FUNCTION · renderer]&lt;br/&gt;in: missing grant&lt;br/&gt;out: agent toggle, file dialog, or connector approval"]
+    ASK -. "updated run state" .-&gt; P
+    P --&gt;|"yes"| C["CONTEXT ASSEMBLER&lt;br/&gt;[FUNCTION · agent-runtime.ts]&lt;br/&gt;in: builder, checkpoint, recent turns, retrieved wiki, files&lt;br/&gt;out: stable provider context"]
+    C --&gt; L["BUILDER TURN&lt;br/&gt;[AGENT · selected provider/model]&lt;br/&gt;in: context + bounded tool protocol&lt;br/&gt;out: answer or one tool call"]
+    L --&gt; T{"TOOL ROUTER&lt;br/&gt;[FUNCTION · tools.ts]&lt;br/&gt;condition: valid enabled tool call?"}
+    T --&gt;|"yes"| X["LOCAL TOOL EXECUTION&lt;br/&gt;[LIBRARY · Electron main]&lt;br/&gt;web, HTTPS fetch, attached files, sandboxed Python, approved APIs"]
+    X --&gt;|"result or visible error"| L
+    T --&gt;|"no"| R{"REVIEW MODE&lt;br/&gt;[FUNCTION]&lt;br/&gt;condition: reviewer enabled?"}
+    R --&gt;|"yes"| V["REVIEWER TURN&lt;br/&gt;[AGENT · Council persona]&lt;br/&gt;in: original request + draft&lt;br/&gt;out: bounded critique"]
+    V --&gt; Q["REVISION TURN&lt;br/&gt;[AGENT · builder]&lt;br/&gt;in: draft + critique + format contract&lt;br/&gt;out: revised answer"]
+    R --&gt;|"no"| O["VISIBLE RESPONSE&lt;br/&gt;[DATA · local conversation]&lt;br/&gt;out: answer + model + tool trace"]
     Q --&gt; O
-    O --&gt; M{"COMPACTION GATE&lt;br/&gt;[FUNCTION]&lt;br/&gt;condition: token/turn threshold or session close?"}
+    O --&gt; M{"COMPACTION GATE&lt;br/&gt;[FUNCTION · memory.ts]&lt;br/&gt;condition: periodic publish or 18+ turn checkpoint?"}
     M --&gt;|"not reached"| U
-    M --&gt;|"reached"| K["MEMORY COMPILER&lt;br/&gt;[AGENT + deterministic verifier]&lt;br/&gt;in: immutable raw evidence + previous checkpoint&lt;br/&gt;out: checkpoint + proposed wiki changes"]
-    K --&gt; W["LOCAL MEMORY&lt;br/&gt;[DATA · Markdown source + rebuildable SQLite FTS]&lt;br/&gt;out: conversational and long-term retrieval"]
+    M --&gt;|"reached"| K["MEMORY COMPILER&lt;br/&gt;[AGENT + deterministic verifier]&lt;br/&gt;in: raw transcript + previous checkpoint&lt;br/&gt;out: summary + evidence-backed fact proposals"]
+    K --&gt; W["LOCAL MEMORY&lt;br/&gt;[DATA · Markdown source + JSON token index]&lt;br/&gt;out: raw JSONL, immutable checkpoints, retrieved wiki pages"]
     W --&gt; U
-    E["EXTERNAL CONNECTOR BUILDER&lt;br/&gt;[AGENT + FUNCTION validator]&lt;br/&gt;in: uploaded API docs + user-approved auth fields&lt;br/&gt;out: non-secret manifest + runtime tools"] --&gt; T
-    S["SESSION SECRET VAULT&lt;br/&gt;[DATA · volatile memory only]&lt;br/&gt;in: provider and connector credentials&lt;br/&gt;out: request-scoped auth; cleared on quit"] --&gt; L
+    E["EXTERNAL CONNECTOR BUILDER&lt;br/&gt;[AGENT + Zod validator]&lt;br/&gt;in: redacted API docs&lt;br/&gt;out: user-approved, same-origin non-secret manifest"] --&gt; T
+    S["SESSION SECRET VAULT&lt;br/&gt;[DATA · React memory only]&lt;br/&gt;in: provider + connector credentials&lt;br/&gt;out: request-scoped auth; cleared on quit"] --&gt; L
     S --&gt; X
 
     classDef agent fill:#dbeafe,stroke:#2563eb,color:#0b2a5b;
     classDef fn fill:#dcfce7,stroke:#16a34a,color:#052e16;
     classDef dec fill:#f3e8ff,stroke:#9333ea,color:#2a0a4a;
-    classDef term fill:#e5e7eb,stroke:#6b7280,color:#111827;
     classDef ask fill:#cffafe,stroke:#0891b2,color:#083344;
     classDef data fill:#ede9fe,stroke:#7c3aed,color:#2a0a4a;
     class U,O,W,S data;

@@ -12,11 +12,11 @@
 
 # testing
 /coverage
-
-# next.js
-/.next/
-/out/
+/output/
+/.playwright-cli/
+/build-resources/icon.iconset/
 /.vinext/
+/.wrangler/
 
 # misc
 .DS_Store
@@ -28,15 +28,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# local environment files are never part of this app's credential flow
 .env*
-!.env.example
-
-# vercel
-.vercel
-
-# typescript
-next-env.d.ts
 /dist/
 dist-electron/
 release/
@@ -47,4 +40,3 @@ release/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
-/.wrangler/

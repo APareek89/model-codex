@@ -1,43 +1,85 @@
 {
-  "name": "model-codex",
-  "version": "0.1.0",
+  "name": "model-codex-desktop",
+  "productName": "Model Codex",
+  "version": "0.2.0",
+  "description": "A private, local-first multi-model agent workspace for macOS.",
+  "author": "Anand Pareek",
   "private": true,
+  "type": "module",
+  "main": "dist-electron/electron/main.js",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "dev": "concurrently -k -s first \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "node scripts/clean-build.mjs && npm run typecheck && vite build && tsc -p tsconfig.electron.json",
+    "package": "electron-builder --mac dmg --arm64",
+    "sign:adhoc": "node scripts/adhoc-sign.mjs",
+    "dist": "npm run build && npm run package && npm run sign:adhoc",
+    "lint": "eslint src electron scripts vite.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "drizzle-orm": "0.45.2",
-    "next": "16.3.3",
-    "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "undici": "7.29.0",
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@tailwindcss/postcss": "4.2.1",
-    "@types/node": "22.19.19",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
-    "drizzle-kit": "0.31.10",
+    "@eslint/js": "9.39.4",
+    "@types/node": "26.4.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.1",
+    "concurrently": "10.0.5",
+    "cross-env": "10.1.0",
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
-    "react-server-dom-webpack": "19.2.6",
-    "tailwindcss": "4.2.1",
+    "globals": "17.11.0",
+    "jsdom": "30.0.1",
     "typescript": "5.9.3",
-    "vinext": "0.0.50",
-    "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "typescript-eslint": "8.68.0",
+    "vite": "8.2.2",
+    "vitest": "4.1.11",
+    "wait-on": "9.1.0"
   },
-  "overrides": {
-    "nanoid": "3.3.18"
-  },
-  "type": "module"
+  "build": {
+    "appId": "com.anandpareek.modelcodex",
+    "productName": "Model Codex",
+    "asar": true,
+    "afterPack": "scripts/after-pack.cjs",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "minimumSystemVersion": "13.0.0",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
+    },
+    "dmg": {
+      "title": "Model Codex ${version}",
+      "artifactName": "Model-Codex-${version}-mac-arm64.${ext}"
+    }
+  }
 }
