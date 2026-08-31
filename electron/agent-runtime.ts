@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ConnectorDefinition, RunChatRequest, RunChatResponse, SynthesizeConnectorRequest, ToolTrace } from "../src/types.js";
 import { appendRawTurn, compileMemory, retrieveLongTermMemory } from "./memory.js";
 import { completeText, type ProviderTurn } from "./providers.js";
+import { redactSecrets } from "./secrets.js";
 import { availableToolDefinitions, executeTool, type ToolContext } from "./tools.js";
 
 const providerSchema = z.enum(["huggingface", "openai", "anthropic", "google"]);
@@ -79,15 +80,6 @@ function parseJsonObject(text: string) {
   const end = clean.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("The model did not return a JSON object.");
   return JSON.parse(clean.slice(start, end + 1)) as unknown;
-}
-
-function redactCredentials(value: string) {
-  return value
-    .replace(/sk-ant-[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/hf_[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/AIza[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/((?:api[-_ ]?key|access[-_ ]?token|client[-_ ]?secret|authorization)\s*[:=]\s*(?:bearer\s+)?)[^\s"']{8,}/gi, "$1[redacted]");
 }
 
 function documentContext(documents: RunChatRequest["attachments"]) {
@@ -206,7 +198,7 @@ export async function runAgentChat(untrusted: unknown): Promise<RunChatResponse>
     }
   }
   const transcript: ProviderTurn[] = [...request.messages, { role: "user", content: request.prompt }, { role: "assistant", content: final }];
-  let memoryPatch: { summary?: string; compactedThrough?: number } = {};
+  let memoryPatch: { compiled?: boolean; summary?: string; compactedThrough?: number } = {};
   try {
     if (!request.memoryEnabled) return { content: final, model: request.model, trace };
     memoryPatch = await compileMemory({
@@ -218,16 +210,16 @@ export async function runAgentChat(untrusted: unknown): Promise<RunChatResponse>
       existingSummary: request.conversationSummary,
       compactedThrough: request.compactedThrough,
     });
-    if (memoryPatch.summary) trace.push({ id: crypto.randomUUID(), name: "memory_compaction", status: "complete", detail: "Conversation checkpoint and verified wiki update saved locally." });
+    if (memoryPatch.compiled) trace.push({ id: crypto.randomUUID(), name: "memory_compaction", status: "complete", detail: memoryPatch.summary ? "Conversation checkpoint and verified wiki update saved locally." : "Verified long-term memory publication completed." });
   } catch (error) {
     trace.push({ id: crypto.randomUUID(), name: "memory_compaction", status: "error", detail: error instanceof Error ? error.message.slice(0, 500) : "Memory compaction failed" });
   }
-  return { content: final, model: request.model, trace, ...memoryPatch };
+  return { content: final, model: request.model, trace, summary: memoryPatch.summary, compactedThrough: memoryPatch.compactedThrough };
 }
 
 export async function synthesizeConnector(untrusted: unknown): Promise<ConnectorDefinition> {
   const request = synthesizeConnectorRequestSchema.parse(untrusted) as SynthesizeConnectorRequest;
-  const documentation = redactCredentials(request.documentation);
+  const documentation = redactSecrets(request.documentation);
   const prompt = `Turn the API documentation into a minimal, reviewable connector manifest. Return JSON only:
 {
   "description":"what this connector can do",

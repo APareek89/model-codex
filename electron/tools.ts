@@ -1,7 +1,7 @@
 import { lookup } from "node:dns/promises";
 import type { LookupAddress } from "node:dns";
 import type { LookupFunction } from "node:net";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -174,7 +174,8 @@ async function python(args: Record<string, unknown>) {
   if (!code.trim()) throw new Error("python requires code.");
   if (code.length > 30_000) throw new Error("Python code exceeds the 30 KB limit.");
   const directory = await mkdtemp(path.join(tmpdir(), "model-codex-python-"));
-  const script = path.join(directory, "task.py");
+  const canonicalDirectory = await realpath(directory);
+  const script = path.join(canonicalDirectory, "task.py");
   await writeFile(script, code, { encoding: "utf8", mode: 0o600 });
   try {
     const candidates = [
@@ -189,8 +190,8 @@ async function python(args: Record<string, unknown>) {
     if (!executable) throw new Error("Python is unavailable. Install Apple's Command Line Tools to enable this tool.");
     return await new Promise<string>((resolve, reject) => {
       const sandbox = "/usr/bin/sandbox-exec";
-      const profile = `(version 1) (allow default) (deny network*) (deny file-read* (subpath "/Users") (subpath "/Volumes")) (deny file-write* (require-not (subpath "${directory}")) (require-not (literal "/dev/null")) (require-not (literal "/dev/stdout")) (require-not (literal "/dev/stderr")))`;
-      const child = spawn(sandbox, ["-p", profile, executable, "-B", "-I", "-S", script], { cwd: directory, env: { PATH: "/usr/bin:/bin", HOME: directory, TMPDIR: directory }, stdio: ["ignore", "pipe", "pipe"] });
+      const profile = `(version 1) (allow default) (deny network*) (deny file-read* (subpath "/Users") (subpath "/Volumes")) (deny file-write* (require-not (subpath "${canonicalDirectory}")) (require-not (literal "/dev/null")) (require-not (literal "/dev/stdout")) (require-not (literal "/dev/stderr")))`;
+      const child = spawn(sandbox, ["-p", profile, executable, "-B", "-I", "-S", script], { cwd: canonicalDirectory, env: { PATH: "/usr/bin:/bin", HOME: canonicalDirectory, TMPDIR: canonicalDirectory }, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error("Python exceeded the 15 second limit.")); }, 15_000);

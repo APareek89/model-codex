@@ -1,4 +1,5 @@
 import type { ProviderId, ProviderModel } from "../src/types.js";
+import { redactSecrets } from "./secrets.js";
 
 export type ProviderTurn = { role: "user" | "assistant"; content: string };
 
@@ -14,11 +15,7 @@ export type CompletionInput = {
 const TIMEOUT_MS = 180_000;
 
 function sanitized(message: string) {
-  return message
-    .replace(/sk-ant-[A-Za-z0-9_-]+/g, "[redacted]")
-    .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
-    .replace(/hf_[A-Za-z0-9_-]+/g, "[redacted]")
-    .replace(/AIza[A-Za-z0-9_-]+/g, "[redacted]")
+  return redactSecrets(message)
     .replace(/([?&]key=)[^&\s]+/gi, "$1[redacted]")
     .slice(0, 1_200);
 }

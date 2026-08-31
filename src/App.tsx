@@ -285,13 +285,13 @@ export default function App() {
           compactedThrough: result.compactedThrough ?? conversation.compactedThrough,
           messages: [...conversation.messages, {
             id: id("message"),
-            role: "assistant",
+            role: "assistant" as const,
             content: result.content,
             createdAt: Date.now(),
             agentId: activeBuilder.name,
             model: result.model,
             trace: result.trace,
-          }],
+          }].slice(result.summary ? -10 : undefined),
         } : conversation),
       }));
     } catch (error) {

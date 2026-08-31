@@ -1,5 +1,5 @@
 # Loop.MD — Model Codex Desktop
-status: waiting_for_first_draft
+status: offered
 
 > AGENT INSTRUCTION: when the desktop core path first runs end-to-end, ask whether to turn on the Loop. Turning it on runs only the FREE checks after meaningful changes; the golden set uses paid provider calls and requires separate approval. While on, run the cheapest checks first, walk every free eval for real, report per-eval pass/fail, fix, and repeat. Offer to graduate an eval after three consecutive passes.
 

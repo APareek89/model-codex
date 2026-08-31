@@ -4,6 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { ProviderId } from "../src/types.js";
 import { completeText, type ProviderTurn } from "./providers.js";
+import { containsSecret, redactSecrets } from "./secrets.js";
 
 const factSchema = z.object({
   slug: z.string().min(1).max(80),
@@ -38,19 +39,6 @@ function safeId(value: string) {
 
 function safeSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72) || "memory";
-}
-
-function redactSecrets(value: string) {
-  return value
-    .replace(/sk-ant-[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/sk-[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/hf_[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/AIza[A-Za-z0-9_-]{8,}/g, "[redacted]")
-    .replace(/(authorization\s*:\s*bearer\s+)[^\s]+/gi, "$1[redacted]");
-}
-
-function containsSecret(value: string) {
-  return redactSecrets(value) !== value || /\b(api[-_ ]?key|access[-_ ]?token|client[-_ ]?secret)\s*[:=]\s*\S{8,}/i.test(value);
 }
 
 async function atomicWrite(destination: string, content: string) {
@@ -121,10 +109,14 @@ async function publishFacts(conversationId: string, transcript: string, facts: z
     const destination = path.join(root(), "wiki", `${slug}.md`);
     let previous = "";
     try { previous = await readFile(destination, "utf8"); } catch { /* first publication */ }
-    const update = `## ${new Date().toISOString()}\n\n${fact.content}\n\n- Category: ${fact.category}\n- Evidence: “${fact.evidence.replace(/\n/g, " ")}”\n- Conversation: ${safeId(conversationId)}\n`;
-    const content = previous
-      ? `${previous.trim()}\n\n${update}`.slice(-180_000)
-      : `# ${fact.title}\n\n${update}`;
+    const conflict = Boolean(previous && !previous.includes(fact.content));
+    const update = `## ${new Date().toISOString()}${conflict ? " — potential conflict" : ""}\n\n${fact.content}\n\n- Category: ${fact.category}\n- Evidence: “${fact.evidence.replace(/\n/g, " ")}”\n- Conversation: ${safeId(conversationId)}${conflict ? "\n- Status: Verify against the earlier entries retained above." : ""}\n`;
+    let content = previous ? `${previous.trim()}\n\n${update}` : `# ${fact.title}\n\n${update}`;
+    if (content.length > 180_000 && previous) {
+      const archive = path.join(root(), "wiki-archive", slug, `${Date.now()}-${crypto.randomUUID()}.md`);
+      await atomicWrite(archive, `${previous.trim()}\n`);
+      content = `# ${fact.title}\n\n> Earlier entries were moved to an immutable local archive after this page reached its size limit.\n\n${update}`;
+    }
     await atomicWrite(destination, `${content.trim()}\n`);
     published.push(slug);
   }
@@ -136,7 +128,7 @@ export async function compileMemory(input: MemoryCompileInput) {
   const messageCount = input.messages.length;
   const needsCompaction = messageCount > 18 && messageCount - (input.compactedThrough ?? 0) >= 6;
   const periodicCompile = messageCount >= 6 && messageCount % 6 === 0;
-  if (!needsCompaction && !periodicCompile) return {};
+  if (!needsCompaction && !periodicCompile) return { compiled: false };
 
   const transcript = input.messages.map((message) => `${message.role.toUpperCase()}: ${message.content}`).join("\n\n").slice(-70_000);
   const compilerPrompt = `Compile this conversation into local memory. Return JSON only with this schema:
@@ -176,7 +168,7 @@ ${transcript}`;
     };
     const destination = path.join(root(), "checkpoints", safeId(input.conversationId), `${Date.now()}-${crypto.randomUUID()}.json`);
     await atomicWrite(destination, `${JSON.stringify(checkpoint, null, 2)}\n`);
-    return { summary: redactSecrets(compilation.summary), compactedThrough: messageCount };
+    return { compiled: true, summary: redactSecrets(compilation.summary), compactedThrough: Math.min(10, messageCount) };
   }
-  return {};
+  return { compiled: true };
 }

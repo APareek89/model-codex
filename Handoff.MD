@@ -1,6 +1,6 @@
 # Handoff.MD — Model Codex Desktop
-last-synced: `1036b67`
-> AGENT: read this fully at session start. FIRST run `git log --oneline 1036b67..HEAD` and reconcile drift.
+last-synced: `d0bdf60`
+> AGENT: read this fully at session start. FIRST run `git log --oneline d0bdf60..HEAD` and reconcile drift.
 > Update before every checkpoint commit, at phase end, and on low-context signals. Rewrite as a snapshot, re-stamp from HEAD, and keep under ~40 lines / ~15 completed items.
 > Git checkpoints are automatic. Run the staged secret scan and configured light FMEA before every commit.
 
@@ -14,15 +14,15 @@ The hosted vinext prototype was replaced by the approved local Electron/Vite/Rea
 - ✅ Local tools cover web search/fetch, attached files, approved API connectors, and macOS-sandboxed Python.
 - ✅ LLM-Wiki memory writes redacted raw JSONL, verified Markdown facts, a rebuildable JSON index, and immutable compaction checkpoints.
 - ✅ External API docs become Zod-validated draft manifests; the user approves operations and re-enters secret values each launch.
-- ✅ Pre-commit FMEA closed cross-origin credential forwarding, DNS rebinding, duplicate retry, hidden reviewer-cost, and optional-stage failure paths; no P0/P1 remains in the light scan.
-- ✅ Screenshot render, native development bridge, packaged custom protocol, Python isolation, arm64 architecture, app signature, and DMG checksum were smoke-tested.
-- ✅ Eight unit tests, lint, type-check, build, Mermaid validation, staged secret scan, and production dependency audit pass.
+- ✅ Full 12-category FMEA at `d0bdf60` is recorded in `docs/FMEA.md`; all three P1s were closed by durable-write redaction, real checkpoint pruning, and conflict-marked/archive-safe memory.
+- ✅ Exact renderer-origin matching and serialized atomic state saves close two additional P2s from the full scan.
+- ✅ Screenshot render, native development bridge, final packaged custom protocol, Python isolation, arm64 architecture, app and mounted-DMG signatures, and DMG checksum were smoke-tested.
+- ✅ Final artifact: `release/Model-Codex-0.2.0-mac-arm64.dmg` (128 MB, SHA-256 `8fce3308c495806465852c813982d5769b911caab37ddb97bc5de5624a1e8d7b`).
+- ✅ Ten unit tests, lint, type-check, build, Mermaid validation, local/package secret invariants, staged secret scan, and production dependency audit pass.
 
 ## Pending points
-- 🤖 Commit the completed desktop slice after the final staged secret/sentinel pass.
-- 🤖 Run feature-complete/full FMEA, final `npm run dist`, mount-test the final DMG, and verify the no-secret state invariant.
-- 🤖 Refresh final Handoff stamp and commit the release-ready state.
 - 🧑 USER: Add personal provider/API credentials in the app after each restart by design.
+- 🧑 USER: Decide whether to turn on the free Power Coding Loop; paid golden evals remain approval-only.
 
 ## Decisions
 - 2026-08-28 — Credentials are volatile and never persisted; there is no `.env` credential path.
@@ -32,4 +32,4 @@ The hosted vinext prototype was replaced by the approved local Electron/Vite/Rea
 - 2026-08-31 — Provider-agnostic bounded JSON tool protocol gives every selected LLM the same local tools.
 - 2026-08-31 — Apple Silicon DMG is ad-hoc signed only; no Developer ID, notarization, or updater.
 
-**Session efficiency:** 🎯 ~62% feature · 🔧 ~28% support/verification · 🔁 ~10% rework
+**Session efficiency:** 🎯 ~60% feature · 🔧 ~33% support/verification · 🔁 ~7% rework

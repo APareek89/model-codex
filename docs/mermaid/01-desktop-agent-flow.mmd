@@ -1,7 +1,7 @@
 %% 01 Model Codex desktop agent flow
 %% files: electron/main.ts, electron/preload.cts, electron/agent-runtime.ts, electron/providers.ts, electron/memory.ts, electron/tools.ts, electron/storage.ts, src/App.tsx
 %% granularity: master
-%% built — verified 2026-08-31 after trust-boundary and failure-fallback review
+%% built — verified 2026-08-31 after feature-complete FMEA and trace review
 flowchart TD
     U["USER REQUEST<br/>[DATA · React state]<br/>in: prompt, attachments, personas, selected model<br/>out: typed run request"] --> P{"PERMISSION GATE<br/>[FUNCTION · Electron main]<br/>condition: requested tools, files, and connector approved?"}
     P -->|"no"| ASK["VISIBLE CONFIGURATION<br/>[FUNCTION · renderer]<br/>in: missing grant<br/>out: agent toggle, file dialog, or connector approval"]
@@ -14,12 +14,12 @@ flowchart TD
     T -->|"no"| R{"REVIEW MODE<br/>[FUNCTION]<br/>condition: reviewer enabled?"}
     R -->|"yes"| V["REVIEWER TURN<br/>[AGENT · Council persona]<br/>in: original request + draft<br/>out: bounded critique"]
     V --> Q["REVISION TURN<br/>[AGENT · builder]<br/>in: draft + critique + format contract<br/>out: revised answer"]
-    R -->|"no"| O["VISIBLE RESPONSE<br/>[DATA · local conversation]<br/>out: answer + model + tool trace"]
+    R -->|"no"| O["VISIBLE RESPONSE<br/>[DATA · redacted local conversation]<br/>out: answer + model + tool trace"]
     Q --> O
     O --> M{"COMPACTION GATE<br/>[FUNCTION · memory.ts]<br/>condition: periodic publish or 18+ turn checkpoint?"}
     M -->|"not reached"| U
     M -->|"reached"| K["MEMORY COMPILER<br/>[AGENT + deterministic verifier]<br/>in: raw transcript + previous checkpoint<br/>out: summary + evidence-backed fact proposals"]
-    K --> W["LOCAL MEMORY<br/>[DATA · Markdown source + JSON token index]<br/>out: raw JSONL, immutable checkpoints, retrieved wiki pages"]
+    K --> W["LOCAL MEMORY<br/>[DATA · Markdown source + JSON token index]<br/>out: immutable checkpoint, conflict-marked wiki, latest 10 turns"]
     W --> U
     E["EXTERNAL CONNECTOR BUILDER<br/>[AGENT + Zod validator]<br/>in: redacted API docs<br/>out: user-approved, same-origin non-secret manifest"] --> T
     S["SESSION SECRET VAULT<br/>[DATA · React memory only]<br/>in: provider + connector credentials<br/>out: request-scoped auth; cleared on quit"] --> L

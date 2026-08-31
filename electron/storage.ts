@@ -2,6 +2,7 @@ import { app } from "electron";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import { redactSecretsDeep } from "./secrets.js";
 
 const messageSchema = z.object({
   id: z.string().max(120),
@@ -115,6 +116,14 @@ function statePath() {
   return path.join(app.getPath("userData"), "workspace-state.json");
 }
 
+async function persistState(state: PersistedState) {
+  const destination = statePath();
+  const temp = `${destination}.${crypto.randomUUID()}.tmp`;
+  await mkdir(path.dirname(destination), { recursive: true });
+  await writeFile(temp, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  await rename(temp, destination);
+}
+
 export async function loadState(): Promise<PersistedState> {
   try {
     const raw = await readFile(statePath(), "utf8");
@@ -129,25 +138,33 @@ export async function loadState(): Promise<PersistedState> {
         }) : [];
         return { ...connector, fields, operations: [] };
       }) : [];
-      return persistedStateSchema.parse({
+      const state = persistedStateSchema.parse({
         ...parsed,
         version: 2,
         connectors,
         preferences: { ...preferences, selectedProvider: null, selectedModelId: null, memoryEnabled: true },
       });
+      const sanitized = persistedStateSchema.parse(redactSecretsDeep(state));
+      if (JSON.stringify(sanitized) !== JSON.stringify(state)) await persistState(sanitized);
+      return sanitized;
     }
-    return persistedStateSchema.parse(parsed);
+    const state = persistedStateSchema.parse(parsed);
+    const sanitized = persistedStateSchema.parse(redactSecretsDeep(state));
+    if (JSON.stringify(sanitized) !== JSON.stringify(state)) await persistState(sanitized);
+    return sanitized;
   } catch {
     return EMPTY_STATE;
   }
 }
 
-export async function saveState(input: unknown): Promise<PersistedState> {
-  const state = persistedStateSchema.parse(input);
-  const destination = statePath();
-  const temp = `${destination}.tmp`;
-  await mkdir(path.dirname(destination), { recursive: true });
-  await writeFile(temp, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  await rename(temp, destination);
-  return state;
+let saveQueue: Promise<void> = Promise.resolve();
+
+export function saveState(input: unknown): Promise<PersistedState> {
+  const state = persistedStateSchema.parse(redactSecretsDeep(input));
+  const task = saveQueue.then(async () => {
+    await persistState(state);
+    return state;
+  });
+  saveQueue = task.then(() => undefined, () => undefined);
+  return task;
 }

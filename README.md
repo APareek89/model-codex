@@ -22,12 +22,12 @@ On macOS 15 or newer, you may instead need to try opening the app once, then use
 
 Open the **Model** tab, choose Hugging Face, OpenAI, Anthropic, or Google, paste your own key, and select **Connect & load models**. The app requests the live model catalog for that credential; choose the model you want to use in chat.
 
-Provider keys and External API secrets exist only in volatile application memory. They are never written to the local state file, Markdown memory, logs, `.env`, cookies, `localStorage`, or `sessionStorage`, and they clear when the app quits. You must reconnect after every restart. Chat content and credentials are still sent to the provider you explicitly select in order to perform inference.
+Provider keys and External API secrets exist only in volatile application memory. They are never written to the local state file, Markdown memory, logs, `.env`, cookies, `localStorage`, or `sessionStorage`, and they clear when the app quits. Recognizable provider-shaped and labeled credentials pasted into chat, connector documentation, or attached text are also redacted at ingestion and again before durable writes. You must reconnect after every restart. Chat content and credentials are still sent to the provider you explicitly select in order to perform inference.
 
 ## What stays on the Mac
 
 - Chats, non-secret model selection, agents, attached agent documents, and connector manifests are stored in `~/Library/Application Support/Model Codex/`.
-- Short-term context stays in the active run. Longer conversations receive compact conversational checkpoints.
+- Short-term context stays in the active run. Longer conversations receive compact conversational checkpoints; after a checkpoint, the latest ten messages remain alongside the summary instead of allowing workspace state to grow forever.
 - Durable facts are proposed by the selected model, verified against exact conversation evidence, and published as local Markdown pages with immutable compaction checkpoints.
 - Connector definitions persist locally, but their key values do not.
 

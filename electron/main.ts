@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { runAgentChat, synthesizeConnector } from "./agent-runtime.js";
 import { listProviderModels } from "./providers.js";
+import { redactSecrets } from "./secrets.js";
 import { loadState, saveState } from "./storage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,8 +27,17 @@ protocol.registerSchemesAsPrivileged([{
 }]);
 
 function isTrustedSender(event: IpcMainInvokeEvent) {
-  const url = event.senderFrame?.url ?? event.sender.getURL();
-  return url.startsWith(rendererOrigin) || Boolean(devServerUrl && url.startsWith(devServerUrl));
+  return isTrustedRendererUrl(event.senderFrame?.url ?? event.sender.getURL());
+}
+
+function isTrustedRendererUrl(raw: string) {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "model-codex:") return url.hostname === "app";
+    return Boolean(devServerUrl && url.origin === new URL(devServerUrl).origin);
+  } catch {
+    return false;
+  }
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent) {
@@ -51,6 +61,7 @@ async function registerAppProtocol() {
   const root = path.resolve(__dirname, "../../dist");
   protocol.handle("model-codex", async (request) => {
     const url = new URL(request.url);
+    if (url.hostname !== "app") return new Response("Forbidden", { status: 403 });
     let relative = decodeURIComponent(url.pathname).replace(/^\/+/, "") || "index.html";
     if (!path.extname(relative)) relative = "index.html";
     const candidate = path.resolve(root, relative);
@@ -108,7 +119,7 @@ function registerIpc() {
         id: crypto.randomUUID(),
         name: path.basename(filePath),
         size: metadata.size,
-        content: await readFile(filePath, "utf8"),
+        content: redactSecrets(await readFile(filePath, "utf8")),
       });
     }
     return files;
@@ -156,8 +167,7 @@ function createWindow() {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => {
-    const allowed = url.startsWith(rendererOrigin) || Boolean(devServerUrl && url.startsWith(devServerUrl));
-    if (!allowed) event.preventDefault();
+    if (!isTrustedRendererUrl(url)) event.preventDefault();
   });
   if (devServerUrl) void window.loadURL(devServerUrl);
   else void window.loadURL(`${rendererOrigin}/`);
